@@ -58,7 +58,10 @@ const defaultState = {
   url: '',
   hashtags: '',
   selected: NETWORKS.map(network => network.id),
-  ready: {}
+  ready: {},
+  scheduleMode: 'now',
+  scheduleDate: '',
+  scheduleTime: '09:00'
 };
 
 const elements = {
@@ -109,6 +112,14 @@ const elements = {
   heroSelectedCount: document.querySelector('#heroSelectedCount'),
   dashboardDate: document.querySelector('#dashboardDate'),
   greetingText: document.querySelector('#greetingText'),
+  dashboardScheduleState: document.querySelector('#dashboardScheduleState'),
+  scheduleFields: document.querySelector('#scheduleFields'),
+  scheduleDate: document.querySelector('#scheduleDate'),
+  scheduleTime: document.querySelector('#scheduleTime'),
+  scheduleError: document.querySelector('#scheduleError'),
+  calendarReminderButton: document.querySelector('#calendarReminderButton'),
+  publishModeLabel: document.querySelector('#publishModeLabel'),
+  publishHelp: document.querySelector('#publishHelp'),
   sidebar: document.querySelector('#sidebar'),
   sidebarScrim: document.querySelector('#sidebarScrim'),
   menuButton: document.querySelector('#menuButton'),
@@ -162,13 +173,21 @@ function initialize() {
   elements.caption.value = state.caption;
   elements.postUrl.value = state.url;
   elements.hashtags.value = state.hashtags;
+  elements.scheduleDate.value = state.scheduleDate;
+  elements.scheduleTime.value = state.scheduleTime || '09:00';
+  elements.scheduleDate.min = toLocalDateInput(new Date());
   setDateAndGreeting();
   updateCaptionCount();
   renderNetworks();
   renderAccounts();
+  renderSchedule();
   updateDashboard();
   bindEvents();
   showView('dashboard', false);
+  window.setInterval(() => {
+    renderSchedule();
+    updateDashboard();
+  }, 60000);
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
@@ -183,6 +202,21 @@ function bindEvents() {
   });
   elements.postUrl.addEventListener('blur', () => validateUrl(false));
   elements.hashtags.addEventListener('input', handleDraftInput);
+
+  document.querySelectorAll('[data-schedule-mode]').forEach(button => {
+    button.addEventListener('click', () => {
+      state.scheduleMode = button.dataset.scheduleMode;
+      if (state.scheduleMode === 'later' && !state.scheduleTime) state.scheduleTime = '09:00';
+      elements.scheduleTime.value = state.scheduleTime;
+      renderSchedule();
+      updateDashboard();
+      persistState(true);
+      if (state.scheduleMode === 'later') window.setTimeout(() => elements.scheduleDate.focus(), 50);
+    });
+  });
+  elements.scheduleDate.addEventListener('change', handleScheduleInput);
+  elements.scheduleTime.addEventListener('change', handleScheduleInput);
+  elements.calendarReminderButton.addEventListener('click', downloadCalendarReminder);
 
   document.querySelectorAll('[data-view-target]').forEach(button => {
     button.addEventListener('click', event => {
@@ -271,9 +305,12 @@ function bindEvents() {
     elements.caption.value = '';
     elements.postUrl.value = '';
     elements.hashtags.value = '';
+    elements.scheduleDate.value = '';
+    elements.scheduleTime.value = '09:00';
     updateCaptionCount();
     renderNetworks();
     renderAccounts();
+    renderSchedule();
     updateDashboard();
     persistState(true);
     toast('Local Tech Social data cleared.');
@@ -314,6 +351,125 @@ function setDateAndGreeting() {
   elements.greetingText.textContent = `${greeting}, Tech Lab.`;
 }
 
+function toLocalDateInput(date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function getScheduledDate() {
+  if (state.scheduleMode !== 'later' || !state.scheduleDate) return null;
+  const time = state.scheduleTime || '09:00';
+  const scheduled = new Date(`${state.scheduleDate}T${time}:00`);
+  return Number.isNaN(scheduled.getTime()) ? null : scheduled;
+}
+
+function formatScheduledDate(date, includeYear = false) {
+  return new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: includeYear ? 'numeric' : undefined,
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+}
+
+function handleScheduleInput() {
+  state.scheduleDate = elements.scheduleDate.value;
+  state.scheduleTime = elements.scheduleTime.value || '09:00';
+  renderSchedule();
+  updateDashboard();
+  persistState(true);
+}
+
+function validateSchedule(showToast = false) {
+  if (state.scheduleMode !== 'later') {
+    elements.scheduleError.textContent = '';
+    return true;
+  }
+  if (!state.scheduleDate) {
+    elements.scheduleError.textContent = 'Choose a publishing date.';
+    if (showToast) toast('Choose a publishing date first.', true);
+    return false;
+  }
+  const scheduled = getScheduledDate();
+  if (!scheduled) {
+    elements.scheduleError.textContent = 'Choose a valid date and time.';
+    if (showToast) toast('Choose a valid publishing date and time.', true);
+    return false;
+  }
+  const selectedDay = toLocalDateInput(scheduled);
+  const today = toLocalDateInput(new Date());
+  if (selectedDay < today) {
+    elements.scheduleError.textContent = 'Choose today or a future date.';
+    if (showToast) toast('The publishing date cannot be before today.', true);
+    return false;
+  }
+  elements.scheduleError.textContent = '';
+  return true;
+}
+
+function renderSchedule() {
+  const isLater = state.scheduleMode === 'later';
+  document.querySelectorAll('[data-schedule-mode]').forEach(button => {
+    button.classList.toggle('active', button.dataset.scheduleMode === state.scheduleMode);
+    button.setAttribute('aria-pressed', button.dataset.scheduleMode === state.scheduleMode ? 'true' : 'false');
+  });
+  elements.scheduleFields.hidden = !isLater;
+  elements.scheduleDate.min = toLocalDateInput(new Date());
+  elements.scheduleDate.value = state.scheduleDate;
+  elements.scheduleTime.value = state.scheduleTime || '09:00';
+  const valid = validateSchedule(false);
+  elements.calendarReminderButton.disabled = !valid;
+  updateDestinationSummary();
+}
+
+function downloadCalendarReminder() {
+  if (!validateSchedule(true)) return;
+  const start = getScheduledDate();
+  const end = new Date(start.getTime() + 30 * 60000);
+  const toICS = date => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const escapeICS = value => String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
+  const description = [state.caption.trim(), state.url.trim(), 'Open Tech Social to publish and confirm the post on each selected network.']
+    .filter(Boolean)
+    .join('\n\n');
+  const calendar = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Tech Social//Publishing Reminder//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:tech-social-${Date.now()}@techfixlab.co.uk`,
+    `DTSTAMP:${toICS(new Date())}`,
+    `DTSTART:${toICS(start)}`,
+    `DTEND:${toICS(end)}`,
+    'SUMMARY:Publish Tech Social post',
+    `DESCRIPTION:${escapeICS(description)}`,
+    'BEGIN:VALARM',
+    'TRIGGER:-PT15M',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:Your Tech Social post is due in 15 minutes',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+  const blob = new Blob([calendar], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `tech-social-post-${state.scheduleDate}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('Calendar reminder downloaded. Open it to add the reminder to your calendar.');
+}
+
 function handleDraftInput() {
   state.caption = elements.caption.value;
   state.url = elements.postUrl.value;
@@ -333,6 +489,13 @@ function updateDashboard() {
   const selectedCount = state.selected.length;
   const caption = state.caption.trim();
   const totalDetails = [caption, state.url.trim(), normalizeHashtags(state.hashtags)].filter(Boolean).length;
+  const scheduled = getScheduledDate();
+  const scheduleIsDue = scheduled && scheduled.getTime() <= Date.now();
+  const scheduleLabel = scheduled ? formatScheduledDate(scheduled) : 'No date selected';
+
+  elements.dashboardScheduleState.classList.toggle('planned', Boolean(scheduled) && !scheduleIsDue);
+  elements.dashboardScheduleState.classList.toggle('due', Boolean(scheduleIsDue));
+  elements.dashboardScheduleState.innerHTML = `<svg viewBox="0 0 24 24"><path d="M5 4h14v16H5Z"/><path d="M5 9h14M9 2v5M15 2v5"/></svg> ${scheduleIsDue ? 'Due now' : scheduled ? scheduleLabel : 'No date selected'}`;
 
   elements.headerReadyText.textContent = readyCount ? `${readyCount} of 6 accounts ready` : 'No accounts ready';
   elements.sidebarReadyCount.textContent = readyCount;
@@ -343,15 +506,15 @@ function updateDashboard() {
 
   if (totalDetails) {
     const wordCount = caption ? caption.split(/\s+/).filter(Boolean).length : 0;
-    elements.draftStatus.textContent = 'In progress';
-    elements.draftStatNote.textContent = caption ? `${wordCount} ${wordCount === 1 ? 'word' : 'words'} in your caption` : 'Link or hashtags added';
+    elements.draftStatus.textContent = scheduleIsDue ? 'Due now' : scheduled ? 'Planned' : 'In progress';
+    elements.draftStatNote.textContent = scheduled ? scheduleLabel : caption ? `${wordCount} ${wordCount === 1 ? 'word' : 'words'} in your caption` : 'Link or hashtags added';
     elements.draftPreview.textContent = caption || 'A draft has been started. Add a caption to bring it to life.';
-    elements.draftMeta.textContent = `${elements.caption.value.length} characters • ${state.url.trim() ? 'Link added' : 'No link yet'}`;
+    elements.draftMeta.textContent = `${elements.caption.value.length} characters • ${state.url.trim() ? 'Link added' : 'No link yet'} • ${scheduled ? `Planned ${scheduleLabel}` : 'Unscheduled'}`;
   } else {
-    elements.draftStatus.textContent = 'Empty';
-    elements.draftStatNote.textContent = 'Start something worth sharing';
-    elements.draftPreview.textContent = 'Your next post will appear here as you write it.';
-    elements.draftMeta.textContent = 'No content yet';
+    elements.draftStatus.textContent = scheduleIsDue ? 'Due now' : scheduled ? 'Planned' : 'Empty';
+    elements.draftStatNote.textContent = scheduled ? scheduleLabel : 'Start something worth sharing';
+    elements.draftPreview.textContent = scheduled ? 'A posting time is reserved. Add your caption and media before it is due.' : 'Your next post will appear here as you write it.';
+    elements.draftMeta.textContent = scheduled ? `Planned ${scheduleLabel}` : 'No content yet';
   }
 
   elements.dashboardChannelList.innerHTML = '';
@@ -397,9 +560,31 @@ function renderNetworks() {
 
 function updateDestinationSummary() {
   const count = state.selected.length;
+  const isLater = state.scheduleMode === 'later';
+  const scheduled = getScheduledDate();
+  const isFuture = scheduled && scheduled.getTime() > Date.now();
+  const needsDate = isLater && !scheduled;
+
   elements.selectedSummary.textContent = `${count} ${count === 1 ? 'network' : 'networks'}`;
-  elements.launchButton.disabled = count === 0;
-  elements.launchButton.querySelector('span').textContent = count ? `Open ${count} posting ${count === 1 ? 'page' : 'pages'}` : 'Choose a destination';
+  elements.launchButton.disabled = count === 0 || needsDate;
+  elements.publishModeLabel.textContent = isFuture ? 'PLANNED POST' : scheduled ? 'SCHEDULE DUE' : 'READY TO OPEN';
+
+  if (!count) {
+    elements.launchButton.querySelector('span').textContent = 'Choose a destination';
+  } else if (needsDate) {
+    elements.launchButton.querySelector('span').textContent = 'Choose a publishing date';
+  } else if (isFuture) {
+    elements.launchButton.querySelector('span').textContent = 'Save posting plan';
+  } else {
+    elements.launchButton.querySelector('span').textContent = `Open ${count} posting ${count === 1 ? 'page' : 'pages'}`;
+  }
+
+  elements.publishHelp.textContent = isFuture
+    ? `Planned for ${formatScheduledDate(scheduled, true)}. Add the calendar reminder so you know when to return.`
+    : scheduled
+      ? 'The planned time has arrived. Open the official posting pages to review and publish.'
+      : 'Allow pop-ups. Your caption will be copied and each official posting page will open.';
+
   elements.selectAllButton.textContent = count === NETWORKS.length ? 'Clear all' : 'Select all';
   elements.networkList.querySelectorAll('.network-row').forEach((row, index) => {
     row.querySelector('input').checked = state.selected.includes(NETWORKS[index].id);
@@ -467,10 +652,20 @@ async function launchPostingPages() {
   state.caption = elements.caption.value;
   state.url = elements.postUrl.value.trim();
   state.hashtags = elements.hashtags.value;
-  if (!validateUrl(true)) return;
+  if (!validateUrl(true) || !validateSchedule(true)) return;
 
   const selectedNetworks = NETWORKS.filter(network => state.selected.includes(network.id));
   if (!selectedNetworks.length) return;
+
+  const scheduled = getScheduledDate();
+  if (scheduled && scheduled.getTime() > Date.now()) {
+    persistState(true);
+    updateDashboard();
+    renderSchedule();
+    toast(`Posting plan saved for ${formatScheduledDate(scheduled, true)}.`);
+    showView('dashboard');
+    return;
+  }
 
   persistState(true);
   updateDashboard();

@@ -66,6 +66,8 @@ python3 -m http.server 4173 --directory public
 - Tech Lab red, charcoal and circuit-inspired visual identity
 - Responsive dashboard and post composer
 - Locally saved draft, hashtags, link and destinations
+- Publishing-day calendar with a time picker and downloadable `.ics` reminder
+- Dashboard status for planned and due posts
 - Official social-network sign-in and publishing pages
 - One action opens all selected posting pages
 - Caption automatically copied for pasting
@@ -74,7 +76,7 @@ python3 -m http.server 4173 --directory public
 
 ## Important limitation
 
-Without approved API/OAuth developer access, social networks require the final post to be reviewed and confirmed on their own website. Account “Ready” indicators are local reminders only.
+Without approved API/OAuth developer access, social networks require the final post to be reviewed and confirmed on their own website. The publishing calendar saves a plan and can download a reminder; it cannot post in the background while the app is closed. Account “Ready” indicators are local reminders only.
 
 ## Privacy
 

@@ -135,7 +135,10 @@
         <section class="dashboard-panel draft-panel">
           <div class="section-heading">
             <div><p class="overline dark-text">IN PROGRESS</p><h3>Your current draft</h3></div>
-            <span class="autosave"><i></i> Autosaved locally</span>
+            <div class="draft-badges">
+              <span class="autosave"><i></i> Autosaved locally</span>
+              <span class="schedule-pill" id="dashboardScheduleState"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5Z"/><path d="M5 9h14M9 2v5M15 2v5"/></svg> No date selected</span>
+            </div>
           </div>
           <div class="draft-sheet">
             <span class="quote-mark">“</span>
@@ -210,12 +213,34 @@
           <div class="card-step"><span>02</span><div><strong>Destinations</strong><small>Choose where this post should go</small></div></div>
           <div class="destination-toolbar"><span>CHANNELS</span><button id="selectAllButton" type="button">Clear all</button></div>
           <div class="network-list" id="networkList"></div>
+
+          <section class="schedule-block" aria-labelledby="scheduleTitle">
+            <div class="schedule-heading">
+              <span class="schedule-icon"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5Z"/><path d="M5 9h14M9 2v5M15 2v5"/></svg></span>
+              <div><strong id="scheduleTitle">Publishing day</strong><small>Choose when you want to post</small></div>
+            </div>
+            <div class="schedule-options" role="group" aria-label="Publishing time">
+              <button class="active" type="button" data-schedule-mode="now">Post now</button>
+              <button type="button" data-schedule-mode="later">Choose a day</button>
+            </div>
+            <div class="schedule-fields" id="scheduleFields" hidden>
+              <label for="scheduleDate"><span>DATE</span><input id="scheduleDate" type="date" /></label>
+              <label for="scheduleTime"><span>TIME</span><input id="scheduleTime" type="time" value="09:00" /></label>
+              <p class="schedule-error" id="scheduleError" role="alert"></p>
+              <button class="calendar-reminder" id="calendarReminderButton" type="button">
+                <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5Z"/><path d="M5 9h14M9 2v5M15 2v5M12 12v5M9.5 14.5h5"/></svg>
+                Add reminder to my calendar
+              </button>
+              <p class="schedule-note">Tech Social cannot publish in the background without official APIs. The reminder brings you back to open and confirm the post.</p>
+            </div>
+          </section>
+
           <div class="publish-block">
-            <div><span>READY TO OPEN</span><strong id="selectedSummary">6 networks</strong></div>
+            <div><span id="publishModeLabel">READY TO OPEN</span><strong id="selectedSummary">6 networks</strong></div>
             <button id="launchButton" class="button button-primary launch-button" type="button">
               <span>Open 6 posting pages</span><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
             </button>
-            <p>Allow pop-ups. Your caption will be copied and each official posting page will open.</p>
+            <p id="publishHelp">Allow pop-ups. Your caption will be copied and each official posting page will open.</p>
           </div>
         </aside>
       </div>

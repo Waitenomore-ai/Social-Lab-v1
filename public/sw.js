@@ -1,4 +1,4 @@
-const CACHE = 'tech-social-v2';
+const CACHE = 'tech-social-v3';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './tech-social-mark.png', './manifest.webmanifest'];
 
 self.addEventListener('install', event => {
