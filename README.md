@@ -4,12 +4,12 @@
 
 Tech Social is Tech Lab's private, browser-based social publishing dashboard. Prepare one post, select destinations, and open the official posting pages for Instagram, TikTok, Facebook, X, LinkedIn and YouTube.
 
-![Tech Social brand mark](public/tech-social-mark.png)
+![Tech Social brand mark](site/tech-social-mark.png)
 
 ## Project structure
 
 ```text
-public/                 Deploy-ready website files
+site/                   Deploy-ready website files
 .github/workflows/      Automatic GitHub Pages deployment
 wrangler.toml           Cloudflare Workers static-assets configuration
 package.json            Local and Cloudflare deployment commands
@@ -23,7 +23,7 @@ This repository is configured for the default Cloudflare deploy command:
 npx wrangler deploy
 ```
 
-The Wrangler configuration publishes `./public` as static assets. No Worker entry-point or build command is required.
+The Wrangler configuration publishes `./site` as static assets. No Worker entry-point or build command is required. The new directory name also ensures that any obsolete `public/_redirects` file left in an older repository is ignored.
 
 In Cloudflare Builds use:
 
@@ -39,7 +39,7 @@ If using the older Pages Git workflow instead:
 
 - **Framework preset:** None
 - **Build command:** Leave blank
-- **Build output directory:** `public`
+- **Build output directory:** `site`
 
 ## Deploy with GitHub Pages
 
@@ -58,7 +58,7 @@ npm run dev
 Or serve the static directory directly:
 
 ```bash
-python3 -m http.server 4173 --directory public
+python3 -m http.server 4173 --directory site
 ```
 
 ## Features
